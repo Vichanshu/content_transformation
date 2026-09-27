@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --background: 224 33% 7%;
+  --foreground: 210 29% 96%;
+  --card: 225 27% 11%;
+  --border: 223 19% 22%;
+  --muted: 220 12% 65%;
+  --accent: 164 74% 61%;
+}
+
+* {
+  @apply border-border;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: hsl(var(--accent) / 0.3);
+}

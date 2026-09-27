@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum JobStatus {
+  PENDING
+  EXTRACTING
+  ROUTING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum ProcessingTier {
+  STANDARD
+  PREMIUM
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+model Job {
+  id                 String            @id @default(cuid())
+  status             JobStatus         @default(PENDING)
+  inputUrl           String
+  inputMimeType      String?
+  outputTypes        Json
+  normalizedContext  Json?
+  extractedTables    Json?
+  timeline           Json?
+  errorMessage       String?
+  complexityScore    Float?
+  selectedTier       ProcessingTier?
+  generationMetadata Json?
+  draftDeliverables  Json?
+  finalDeliverables  Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  logs               Log[]
+  generationDrafts   GenerationDraft[]
+
+  @@index([status, createdAt])
+}
+
+model GenerationDraft {
+  id         String   @id @default(cuid())
+  jobId      String
+  outputType String
+  persona    String
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, outputType, persona])
+  @@index([jobId, outputType])
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  jobId     String
+  level     LogLevel @default(INFO)
+  message   String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, timestamp])
+}
