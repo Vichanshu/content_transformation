@@ -15,8 +15,8 @@ class ExtractionRequest(BaseModel):
     @classmethod
     def validate_source_url(cls, value: str) -> str:
         parsed = urlparse(value)
-        if parsed.scheme not in {"https", "s3"} or not parsed.hostname:
-            raise ValueError("source_url must be an HTTPS or s3:// URL")
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("source_url must be an HTTPS URL")
         if parsed.username or parsed.password:
             raise ValueError("source_url must not contain credentials")
         return value

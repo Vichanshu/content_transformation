@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 enum JobStatus {
@@ -12,6 +13,7 @@ enum JobStatus {
   EXTRACTING
   ROUTING
   GENERATING
+  FORMATTING
   COMPLETED
   FAILED
 }
@@ -31,8 +33,11 @@ enum LogLevel {
 model Job {
   id                 String            @id @default(cuid())
   status             JobStatus         @default(PENDING)
-  inputUrl           String
+  inputUrl           String?
+  inputText          String?           @db.Text
   inputMimeType      String?
+  requestedTier      ProcessingTier?
+  requestOptions     Json?
   outputTypes        Json
   normalizedContext  Json?
   extractedTables    Json?

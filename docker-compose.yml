@@ -1,70 +1,40 @@
 services:
-  postgres:
-    image: postgres:16
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-transformation}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-for-local-development}
-      POSTGRES_DB: ${POSTGRES_DB:-transformation_db}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
+  # Dual-track extraction: Docling documents and FFmpeg + Gemini media transcripts.
   worker:
-    build:
-      context: ./worker
-      dockerfile: Dockerfile
-    restart: unless-stopped
+    build: ./worker
     env_file: .env
     environment:
       PYTHONUNBUFFERED: "1"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./worker:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
+    expose:
+      - "8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 10
 
+  # Local Inngest development server; processes submitted transformation jobs.
+  inngest:
+    image: inngest/inngest:latest
+    command: inngest dev -u http://web:3000/api/inngest
+    ports:
+      - "8288:8288"
+    depends_on:
+      - web
+
+  # Dashboard and job API. Gemini is called directly with GEMINI_API_KEY.
   web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    restart: unless-stopped
+    build: ./web
     env_file: .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: "3000"
-      DATABASE_URL: ${DATABASE_URL:-postgresql://transformation:change-me-for-local-development@postgres:5432/transformation_db?schema=public}
       WORKER_INTERNAL_URL: http://worker:8000
-      INNGEST_DEV_SERVER_URL: http://host.docker.internal:8288
-      INNGEST_DEV: ${INNGEST_DEV_SERVER_URL:-http://host.docker.internal:8288}
-    command: sh -c "npx prisma generate && npm run dev -- --hostname 0.0.0.0"
+      INNGEST_DEV_SERVER_URL: http://inngest:8288
+      INNGEST_DEV: http://inngest:8288
+    command: sh -c 'DATABASE_URL="$DATABASE_URL_UNPOOLED" npx prisma migrate deploy && npm run start -- --hostname 0.0.0.0'
     ports:
       - "3000:3000"
-    volumes:
-      - ./web:/app
-      - web_node_modules:/app/node_modules
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
-      postgres:
-        condition: service_healthy
       worker:
         condition: service_healthy
-
-volumes:
-  postgres_data:
-  web_node_modules:

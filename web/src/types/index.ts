@@ -7,10 +7,21 @@ export type OutputType =
   | "tweet_thread"
   | "strategic_advisory"
   | "slide_deck"
-  | "executive_summary";
+  | "executive_summary"
+  | "infographic";
 
 export interface JobSubmittedEventData {
   jobId: string;
+  payload?: JobSubmissionPayload;
+}
+
+export interface JobSubmissionPayload {
+  sourceUrls: string[];
+  sourceText?: string;
+  inputMimeType: string;
+  outputTypes: OutputType[];
+  tier?: "STANDARD" | "PREMIUM";
+  options?: Record<string, unknown>;
 }
 
 export interface NormalizedContext {

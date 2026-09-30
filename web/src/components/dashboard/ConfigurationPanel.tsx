@@ -1,0 +1,22 @@
+"use client";
+import { ArrowRight, Cpu, SlidersHorizontal, Sparkles } from "lucide-react";
+import { GENERATION_CHOICES, type GenerationOptions } from "@/lib/job-config";
+import type { DashboardFormState } from "@/types/dashboard";
+
+interface Props { form: DashboardFormState; onChange: (patch: Partial<DashboardFormState>) => void; submitting: boolean; valid: boolean }
+const LABELS: Record<keyof GenerationOptions, string> = { audience: "Target audience", tone: "Tone of voice", language: "Output language", detail: "Level of detail", objective: "Communication objective", style: "Content style" };
+
+export default function ConfigurationPanel({ form, onChange, submitting, valid }: Props): React.JSX.Element {
+  const change = (key: keyof GenerationOptions, value: string) => onChange({ options: { ...form.options, [key]: value } as GenerationOptions });
+  return <section className="panel configuration-panel" aria-labelledby="configuration-heading">
+    <div className="section-heading"><span className="section-number">03</span><div><h2 id="configuration-heading">Make it yours</h2><p>Give every output a clear direction.</p></div><SlidersHorizontal size={17} className="ml-auto text-slate-500" aria-hidden="true" /></div>
+    <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
+      {(Object.keys(GENERATION_CHOICES) as Array<keyof GenerationOptions>).filter((key) => key !== "detail").map((key) => <div key={key}><label className="field-label" htmlFor={`config-${key}`}>{LABELS[key]}</label><select id={`config-${key}`} className="field-input" value={form.options[key]} disabled={submitting} onChange={(event) => change(key, event.target.value)}>{GENERATION_CHOICES[key].map((value) => <option key={value} value={value}>{value}</option>)}</select></div>)}
+      <fieldset className="min-w-0 sm:col-span-2 lg:col-span-1"><legend className="field-label">Level of detail</legend><div className="grid grid-cols-3 gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">{GENERATION_CHOICES.detail.map((value, index) => <button type="button" key={value} aria-pressed={form.options.detail === value} disabled={submitting} title={value} onClick={() => change("detail", value)} className={`rounded-md px-1 py-2.5 text-xs transition ${form.options.detail === value ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>{["Concise", "Balanced", "Deep dive"][index]}</button>)}</div></fieldset>
+    </div>
+    <fieldset className="mt-6 border-t border-slate-800 pt-5"><legend className="sr-only">Processing preference</legend><p className="field-label">Processing preference</p><div className="space-y-2">
+      {([{ value: "automatic", title: "Automatic routing", detail: "The right depth for your source", icon: Cpu }, { value: "deep", title: "Deep synthesis", detail: "Multiple specialist perspectives", icon: Sparkles }] as const).map(({ value, title, detail, icon: Icon }) => <label key={value} className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition ${form.processing === value ? "border-indigo-500/50 bg-indigo-500/5" : "border-slate-800"}`}><input type="radio" name="processing" className="accent-indigo-500" checked={form.processing === value} disabled={submitting} onChange={() => onChange({ processing: value })} /><Icon size={17} className="text-slate-400" aria-hidden="true" /><span><span className="block text-xs font-medium text-slate-200">{title}{value === "automatic" && <span className="ml-2 text-[9px] uppercase tracking-wider text-indigo-300">Recommended</span>}</span><span className="mt-1 block text-[11px] text-slate-500">{detail}</span></span></label>)}
+    </div></fieldset>
+    <div className="mt-6 border-t border-slate-800 pt-5"><div className="mb-4 flex justify-between text-xs text-slate-400"><span>Ready to create</span><span className="text-slate-200">{form.outputTypes.length} deliverable{form.outputTypes.length !== 1 ? "s" : ""}</span></div><button type="submit" disabled={!valid || submitting} className="primary-button w-full">{submitting ? <span className="loading-ring" aria-hidden="true" /> : <Sparkles size={16} aria-hidden="true" />}{submitting ? "Starting transformation…" : "Generate content"}<ArrowRight size={16} className="ml-auto" aria-hidden="true" /></button><p className="mt-3 text-center text-[11px] leading-5 text-slate-500">Grounded in your source. Tailored to your audience.</p></div>
+  </section>;
+}

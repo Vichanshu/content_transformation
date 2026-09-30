@@ -20,7 +20,9 @@ uploads/
 tmp/
 temp/
 media-cache/
+.superdesign/tmp/
 *.mp4
 *.mov
 *.wav
 *.mp3
+.neon

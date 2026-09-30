@@ -1,10 +1,8 @@
-"""Docling-backed document extraction and normalization."""
+"""Local Docling extraction for PDF, DOCX, and PPTX sources."""
 
 import asyncio
-import multiprocessing
 import re
 import tempfile
-from multiprocessing.connection import Connection, wait
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -18,12 +16,19 @@ from app.schemas.payload import (
 from app.services.source_io import download_source, source_extension, source_mime_type
 
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_DOCUMENT_EXTENSIONS = {".pdf", ".pptx", ".docx"}
+_DOCUMENT_SUFFIXES = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
 
 
 def clean_text(value: str) -> str:
-    """Remove unsafe controls while retaining Markdown line structure."""
-    value = _CONTROL_CHARACTERS.sub("", value).replace("\r\n", "\n")
-    return "\n".join(line.rstrip() for line in value.splitlines()).strip()
+    return "\n".join(
+        line.rstrip()
+        for line in _CONTROL_CHARACTERS.sub("", value).replace("\r\n", "\n").splitlines()
+    ).strip()
 
 
 class DoclingExtractor:
@@ -33,49 +38,37 @@ class DoclingExtractor:
     async def extract(
         self, request: DocumentExtractionRequest
     ) -> NormalizedExtractionResponse:
-        """Download to isolated scratch space and convert off the event loop."""
+        suffix = source_extension(request.source_url)
+        if suffix not in _DOCUMENT_EXTENSIONS:
+            mime = await source_mime_type(request.source_url, self.settings)
+            suffix = _DOCUMENT_SUFFIXES.get(mime or "", "")
+        if not suffix:
+            raise ValueError("Unsupported document type")
         with tempfile.TemporaryDirectory(prefix="cte-document-") as scratch:
-            suffix = None
-            if source_extension(request.source_url) not in {
-                ".pdf", ".pptx", ".docx"
-            }:
-                mime = await source_mime_type(request.source_url, self.settings)
-                suffix = {
-                    "application/pdf": ".pdf",
-                    "application/vnd.openxmlformats-officedocument"
-                    ".presentationml.presentation": ".pptx",
-                    "application/vnd.openxmlformats-officedocument"
-                    ".wordprocessingml.document": ".docx",
-                }.get(mime)
             path = await download_source(
                 request.source_url, Path(scratch), self.settings, suffix
             )
-            return await asyncio.to_thread(
-                _convert_with_timeout,
-                path,
-                request,
-                self.settings.docling_timeout_seconds,
-            )
+            try:
+                async with asyncio.timeout(self.settings.docling_timeout_seconds):
+                    return await asyncio.to_thread(self.convert_local, path, request)
+            except TimeoutError as exc:
+                raise RuntimeError("Docling conversion timed out") from exc
 
     @staticmethod
     def convert_local(
         path: Path, request: DocumentExtractionRequest
     ) -> NormalizedExtractionResponse:
-        """Convert a local path, including one staged by another trusted caller."""
         from docling.document_converter import DocumentConverter
 
-        result = DocumentConverter().convert(str(path))
-        document = result.document
+        document = DocumentConverter().convert(str(path)).document
         markdown = clean_text(document.export_to_markdown())
         headings: list[DocumentHeading] = []
         for item, depth in document.iterate_items():
             label = str(getattr(item, "label", "")).lower()
             if "title" in label or "section_header" in label:
-                heading_text = clean_text(str(getattr(item, "text", "")))
-                if heading_text:
-                    headings.append(
-                        DocumentHeading(level=max(1, int(depth)), text=heading_text)
-                    )
+                text = clean_text(str(getattr(item, "text", "")))
+                if text:
+                    headings.append(DocumentHeading(level=max(1, int(depth)), text=text))
 
         tables: list[DocumentTable] = []
         for table in document.tables:
@@ -90,72 +83,17 @@ class DoclingExtractor:
                     ],
                 )
             )
-
         if not markdown and not tables:
             raise RuntimeError("Docling produced no extractable content")
-
         source_name = Path(unquote(urlparse(request.source_url).path)).name
-        title = next(
-            (heading.text for heading in headings if heading.level == 1),
-            None,
-        ) or source_name or None
+        title = next((item.text for item in headings if item.level == 1), None)
         return NormalizedExtractionResponse(
             job_id=request.job_id,
             source_type="document",
-            title=title,
+            title=title or source_name or None,
             word_count=len(markdown.split()),
             content_markdown=markdown,
-            tables=tables,
             headings=headings,
-            metadata={"source_name": source_name, "table_count": len(tables)},
+            tables=tables,
+            metadata={"extractor": "docling", "source_name": source_name},
         )
-
-
-def _convert_child(
-    path: str, request_json: str, connection: Connection
-) -> None:
-    try:
-        request = DocumentExtractionRequest.model_validate_json(request_json)
-        result = DoclingExtractor.convert_local(Path(path), request)
-        connection.send(("ok", result.model_dump(mode="json")))
-    except Exception as exc:
-        connection.send(("error", f"{type(exc).__name__}: {exc}"[:500]))
-    finally:
-        connection.close()
-
-
-def _convert_with_timeout(
-    path: Path, request: DocumentExtractionRequest, timeout_seconds: int
-) -> NormalizedExtractionResponse:
-    """Run heavyweight Docling work in a killable child process."""
-    context = multiprocessing.get_context("spawn")
-    receiver, sender = context.Pipe(duplex=False)
-    process = context.Process(
-        target=_convert_child,
-        args=(str(path), request.model_dump_json(), sender),
-        daemon=False,
-    )
-    process.start()
-    sender.close()
-    try:
-        ready = wait([receiver, process.sentinel], timeout_seconds)
-        if receiver not in ready and process.sentinel in ready:
-            raise RuntimeError("Docling process exited without a result")
-        if receiver not in ready:
-            raise TimeoutError("Docling conversion timed out")
-        try:
-            status, payload = receiver.recv()
-        except EOFError as exc:
-            raise RuntimeError("Docling process exited without a result") from exc
-        process.join(timeout=5)
-        if status != "ok":
-            raise RuntimeError(f"Docling conversion failed: {payload}")
-        return NormalizedExtractionResponse.model_validate(payload)
-    finally:
-        receiver.close()
-        if process.is_alive():
-            process.terminate()
-        process.join(timeout=5)
-        if process.is_alive():
-            process.kill()
-            process.join(timeout=5)

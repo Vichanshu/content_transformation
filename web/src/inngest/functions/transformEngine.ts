@@ -2,6 +2,15 @@ import axios from "axios";
 import type { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
+import { parseGenerationOptions, type GenerationOptions } from "@/lib/job-config";
+import {
+  formatAdvisory,
+  formatExecutiveSummary,
+  formatInfographic,
+  formatPresentation,
+  formatSocialPost,
+  formatVideoPackage
+} from "@/lib/formatters";
 import { inngest } from "@/inngest/client";
 import {
   aggregateMoAResults,
@@ -9,8 +18,9 @@ import {
   evaluateComplexity,
   generateMoASpecialist,
   generateSingleAgent,
-  prepareBudgetedContext
-} from "@/lib/litellm";
+  prepareBudgetedContext,
+  verifyMoADrafts
+} from "@/lib/gemini";
 import type {
   JobSubmittedEventData,
   NormalizedContext,
@@ -96,6 +106,11 @@ async function loadNormalizedContext(jobId: string): Promise<NormalizedContext> 
   return job.normalizedContext;
 }
 
+async function loadGenerationOptions(jobId: string) {
+  const job = await db.job.findUniqueOrThrow({ where: { id: jobId }, select: { requestOptions: true } });
+  return parseGenerationOptions(job.requestOptions);
+}
+
 async function storeGenerationDraft(
   jobId: string,
   outputType: OutputType,
@@ -118,9 +133,33 @@ async function generateAndStoreSpecialist(
   role: string
 ): Promise<{ outputType: OutputType; persona: string }> {
   const context = await loadNormalizedContext(jobId);
-  const draft = await generateMoASpecialist(context, outputType, role);
+  const draft = await generateMoASpecialist(context, outputType, role, await loadGenerationOptions(jobId));
   await storeGenerationDraft(jobId, outputType, persona, draft);
   return { outputType, persona };
+}
+
+function formatDraft(
+  outputType: OutputType,
+  draft: string,
+  language: GenerationOptions["language"]
+): unknown {
+  switch (outputType) {
+    case "video_script":
+    case "storyboard":
+      return formatVideoPackage(draft);
+    case "linkedin_post":
+      return formatSocialPost(draft, "linkedin");
+    case "tweet_thread":
+      return formatSocialPost(draft, "twitter");
+    case "strategic_advisory":
+      return formatAdvisory(draft, language);
+    case "slide_deck":
+      return formatPresentation(draft);
+    case "executive_summary":
+      return formatExecutiveSummary(draft, language);
+    case "infographic":
+      return formatInfographic(draft);
+  }
 }
 
 export const processTransformationJob = inngest.createFunction(
@@ -133,7 +172,7 @@ export const processTransformationJob = inngest.createFunction(
         | undefined;
       const jobId = original?.data?.jobId;
       if (!jobId) return;
-      await step.run("record-extraction-failure", async () => {
+      await step.run("record-job-failure", async () => {
         const message = safeErrorMessage(error);
         await db.$transaction([
           db.job.update({
@@ -166,8 +205,22 @@ export const processTransformationJob = inngest.createFunction(
     const extraction = await step.run("extract-content", async () => {
       const job = await db.job.findUniqueOrThrow({
         where: { id: jobId },
-        select: { id: true, inputUrl: true }
+        select: { id: true, inputUrl: true, inputText: true }
       });
+      if (job.inputText) {
+        const text = job.inputText.trim();
+        const context: NormalizedContext = {
+          job_id: job.id, source_type: "document", title: "Text source",
+          word_count: text.split(/\s+/u).length, content_markdown: text,
+          tables: [], timeline: [], headings: [], metadata: { source: "inline" }
+        };
+        await db.job.update({ where: { id: job.id }, data: {
+          normalizedContext: context as unknown as Prisma.InputJsonValue,
+          extractedTables: [], timeline: []
+        } });
+        return { jobId: job.id, wordCount: context.word_count, hasVideo: false };
+      }
+      if (!job.inputUrl) throw new Error("Job is missing a source");
       const workerUrl = process.env.WORKER_INTERNAL_URL;
       if (!workerUrl) throw new Error("WORKER_INTERNAL_URL is not configured");
       try {
@@ -220,7 +273,7 @@ export const processTransformationJob = inngest.createFunction(
     const generationInput = await step.run("load-generation-input", async () => {
       const job = await db.job.findUniqueOrThrow({
         where: { id: jobId },
-        select: { outputTypes: true }
+        select: { outputTypes: true, requestedTier: true }
       });
       const context = await loadNormalizedContext(jobId);
       const budgeted = prepareBudgetedContext(context);
@@ -231,7 +284,8 @@ export const processTransformationJob = inngest.createFunction(
         "tweet_thread",
         "strategic_advisory",
         "slide_deck",
-        "executive_summary"
+        "executive_summary",
+        "infographic"
       ];
       const rawTypes = job.outputTypes;
       if (
@@ -248,6 +302,7 @@ export const processTransformationJob = inngest.createFunction(
       return {
         jobId,
         outputTypes: [...new Set(rawTypes as OutputType[])],
+        requestedTier: job.requestedTier,
         contextLength: budgeted.originalCharacters,
         truncated: budgeted.truncated
       };
@@ -259,6 +314,11 @@ export const processTransformationJob = inngest.createFunction(
         generationInput.contextLength
       )
     );
+    const pipeline = generationInput.requestedTier === "PREMIUM"
+      ? "multi"
+      : generationInput.requestedTier === "STANDARD"
+        ? "single"
+        : complexity.pipeline;
 
     await step.run("mark-generating", async () => {
       await db.$transaction([
@@ -268,7 +328,7 @@ export const processTransformationJob = inngest.createFunction(
             status: "GENERATING",
             complexityScore: complexity.score,
             selectedTier:
-              complexity.pipeline === "multi" ? "PREMIUM" : "STANDARD",
+              pipeline === "multi" ? "PREMIUM" : "STANDARD",
             generationMetadata: {
               truncated: generationInput.truncated,
               originalCharacters: generationInput.contextLength,
@@ -280,17 +340,17 @@ export const processTransformationJob = inngest.createFunction(
           data: {
             jobId,
             level: "INFO",
-            message: `Generation routed to ${complexity.pipeline} pipeline (score ${complexity.score}/10): ${complexity.rationale.slice(0, 500)}`
+            message: `Generation routed to ${pipeline} pipeline (score ${complexity.score}/10): ${complexity.rationale.slice(0, 500)}`
           }
         })
       ]);
     });
 
     for (const outputType of generationInput.outputTypes) {
-      if (complexity.pipeline === "single") {
+      if (pipeline === "single") {
         await step.run(`generate-${outputType}`, async () => {
           const context = await loadNormalizedContext(jobId);
-          const draft = await generateSingleAgent(context, outputType);
+          const draft = await generateSingleAgent(context, outputType, await loadGenerationOptions(jobId));
           await storeGenerationDraft(jobId, outputType, "single", draft);
           return { outputType, persona: "single" };
         });
@@ -298,14 +358,6 @@ export const processTransformationJob = inngest.createFunction(
         await Promise.all([
           step.run(`specialist-${outputType}-writer`, async () =>
             generateAndStoreSpecialist(jobId, outputType, "writer", "Writer")
-          ),
-          step.run(`specialist-${outputType}-critic`, async () =>
-            generateAndStoreSpecialist(
-              jobId,
-              outputType,
-              "critic",
-              "Tone and Accuracy Critic"
-            )
           ),
           step.run(`specialist-${outputType}-strategist`, async () =>
             generateAndStoreSpecialist(
@@ -316,6 +368,24 @@ export const processTransformationJob = inngest.createFunction(
             )
           )
         ]);
+        await step.run(`critic-verify-${outputType}`, async () => {
+          const specialists = await db.generationDraft.findMany({
+            where: { jobId, outputType, persona: { in: ["writer", "strategist"] } },
+            select: { persona: true, content: true }
+          });
+          if (specialists.length !== 2) {
+            throw new Error(`Missing specialist drafts for ${outputType}`);
+          }
+          const context = await loadNormalizedContext(jobId);
+          const critique = await verifyMoADrafts(
+            Object.fromEntries(specialists.map(({ persona, content }) => [persona, content])),
+            outputType,
+            prepareBudgetedContext(context).sourceEvidence,
+            await loadGenerationOptions(jobId)
+          );
+          await storeGenerationDraft(jobId, outputType, "critic", critique);
+          return { outputType, persona: "critic" };
+        });
         await step.run(`aggregate-moa-${outputType}`, async () => {
           const specialists = await db.generationDraft.findMany({
             where: {
@@ -336,7 +406,8 @@ export const processTransformationJob = inngest.createFunction(
           const draft = await aggregateMoAResults(
             drafts,
             outputType,
-            sourceEvidence
+            sourceEvidence,
+            await loadGenerationOptions(jobId)
           );
           await storeGenerationDraft(jobId, outputType, "aggregate", draft);
           return { outputType, persona: "aggregate" };
@@ -345,7 +416,7 @@ export const processTransformationJob = inngest.createFunction(
     }
 
     await step.run("save-draft-deliverables", async () => {
-      const persona = complexity.pipeline === "multi" ? "aggregate" : "single";
+      const persona = pipeline === "multi" ? "aggregate" : "single";
       const savedDrafts = await db.generationDraft.findMany({
         where: { jobId, persona },
         select: { outputType: true, content: true }
@@ -375,6 +446,63 @@ export const processTransformationJob = inngest.createFunction(
       return { jobId, outputCount: generationInput.outputTypes.length };
     });
 
-    return { jobId, status: "drafts-ready" as const };
+    await step.run("mark-formatting", async () => {
+      await db.job.updateMany({ where: { id: jobId, status: "GENERATING" }, data: { status: "FORMATTING" } });
+      return { jobId };
+    });
+
+    await step.run("format-deliverables", async () => {
+      const job = await db.job.findUniqueOrThrow({
+        where: { id: jobId },
+        select: {
+          status: true,
+          outputTypes: true,
+          draftDeliverables: true,
+          finalDeliverables: true
+        }
+      });
+      if (job.status === "COMPLETED" && isRecord(job.finalDeliverables)) {
+        return { jobId, outputCount: generationInput.outputTypes.length };
+      }
+      if (job.status !== "FORMATTING") {
+        throw new Error(`Cannot deliver job in ${job.status} status`);
+      }
+      if (!isRecord(job.draftDeliverables) || !isStringArray(job.outputTypes)) {
+        throw new Error("Job has no valid draft deliverables or output types");
+      }
+      const { language } = await loadGenerationOptions(jobId);
+      const finalDeliverables: Record<string, unknown> = {};
+      for (const outputType of generationInput.outputTypes) {
+        if (!job.outputTypes.includes(outputType)) {
+          throw new Error(`Missing requested output type ${outputType}`);
+        }
+        const draft = job.draftDeliverables[outputType];
+        if (typeof draft !== "string" || !draft.trim()) {
+          throw new Error(`Missing draft deliverable for ${outputType}`);
+        }
+        finalDeliverables[outputType] = formatDraft(outputType, draft, language);
+      }
+      await db.$transaction([
+        db.job.update({
+          where: { id: jobId, status: "FORMATTING" },
+          data: {
+            finalDeliverables:
+              finalDeliverables as unknown as Prisma.InputJsonValue,
+            status: "COMPLETED",
+            errorMessage: null
+          }
+        }),
+        db.log.create({
+          data: {
+            jobId,
+            level: "INFO",
+            message: `Formatted and delivered ${generationInput.outputTypes.length} outputs`
+          }
+        })
+      ]);
+      return { jobId, outputCount: generationInput.outputTypes.length };
+    });
+
+    return { jobId, status: "COMPLETED" as const };
   }
 );

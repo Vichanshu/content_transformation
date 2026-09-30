@@ -1,4 +1,4 @@
-"""FastAPI entry point for multimodal extraction."""
+"""FastAPI entry point for dual-track document and media extraction."""
 
 import logging
 import time
@@ -16,11 +16,9 @@ from app.schemas.payload import (
     NormalizedExtractionResponse,
 )
 from app.services.docling_service import DoclingExtractor
-from app.services.media_service import (
-    MediaExtractor,
-    MediaProcessingError,
-    TranscriptionUnavailableError,
-)
+from app.services.context_normalizer import normalize_context
+from app.services.text_service import extract_text_source, extract_youtube, youtube_video_id
+from app.services.media_service import MediaExtractor, MediaProcessingError
 from app.services.source_io import SourceError, source_extension, source_mime_type
 
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +26,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 document_extractor = DoclingExtractor(settings)
 media_extractor = MediaExtractor(settings)
-app = FastAPI(title="Content Transformation Extraction Worker", version="0.2.0")
+app = FastAPI(title="Content Transformation Extraction Worker", version="1.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.cors_allowed_origins),
@@ -47,7 +45,6 @@ _DOCUMENT_MIMES = {
 }
 _VIDEO_MIMES = {"video/mp4", "video/quicktime"}
 _AUDIO_MIMES = {"audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav"}
-
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -93,20 +90,8 @@ async def source_error_handler(request: Request, exc: SourceError) -> JSONRespon
     )
 
 
-@app.exception_handler(TranscriptionUnavailableError)
-async def transcription_unavailable_handler(
-    request: Request, exc: TranscriptionUnavailableError
-) -> JSONResponse:
-    return JSONResponse(
-        status_code=503,
-        content={"error": "transcription_unavailable", "detail": str(exc)},
-    )
-
-
 @app.exception_handler(MediaProcessingError)
-async def media_error_handler(
-    request: Request, exc: MediaProcessingError
-) -> JSONResponse:
+async def media_error_handler(request: Request, exc: MediaProcessingError) -> JSONResponse:
     logger.warning("media_error path=%s detail=%s", request.url.path, exc)
     return JSONResponse(
         status_code=502, content={"error": "media_processing_error", "detail": str(exc)}
@@ -122,11 +107,12 @@ async def health() -> dict[str, str]:
 async def extract_document_endpoint(
     request: DocumentExtractionRequest,
 ) -> NormalizedExtractionResponse:
-    if source_extension(request.source_url) not in _DOCUMENT_EXTENSIONS:
+    extension = source_extension(request.source_url)
+    if extension not in _DOCUMENT_EXTENSIONS:
         mime = await source_mime_type(request.source_url, settings)
         if mime not in _DOCUMENT_MIMES:
             raise HTTPException(status_code=415, detail="Unsupported document type")
-    return await document_extractor.extract(request)
+    return normalize_context(await document_extractor.extract(request))
 
 
 @app.post("/api/extract/media", response_model=NormalizedExtractionResponse)
@@ -146,29 +132,26 @@ async def extract_media_endpoint(
             media_type = "audio"
         else:
             raise HTTPException(status_code=415, detail="Unsupported media type")
-    return await media_extractor.extract(request, media_type=media_type)
+    return normalize_context(await media_extractor.extract(request, media_type=media_type))
 
 
 @app.post("/api/extract/auto", response_model=NormalizedExtractionResponse)
 async def extract_auto_endpoint(
     request: ExtractionRequest,
 ) -> NormalizedExtractionResponse:
+    video_id = youtube_video_id(request.source_url)
+    if video_id:
+        return normalize_context(await extract_youtube(video_id, request, settings))
     extension = source_extension(request.source_url)
     if extension in _DOCUMENT_EXTENSIONS:
-        return await document_extractor.extract(
-            DocumentExtractionRequest(**request.model_dump())
-        )
+        return normalize_context(await document_extractor.extract(DocumentExtractionRequest(**request.model_dump())))
     if extension in _VIDEO_EXTENSIONS | _AUDIO_EXTENSIONS:
-        return await extract_media_endpoint(
-            MediaExtractionRequest(**request.model_dump())
-        )
+        return await extract_media_endpoint(MediaExtractionRequest(**request.model_dump()))
     mime = await source_mime_type(request.source_url, settings)
     if mime in _DOCUMENT_MIMES:
-        return await document_extractor.extract(
-            DocumentExtractionRequest(**request.model_dump())
-        )
+        return normalize_context(await document_extractor.extract(DocumentExtractionRequest(**request.model_dump())))
     if mime in _VIDEO_MIMES | _AUDIO_MIMES:
-        return await extract_media_endpoint(
-            MediaExtractionRequest(**request.model_dump())
-        )
+        return await extract_media_endpoint(MediaExtractionRequest(**request.model_dump()))
+    if mime in {"text/plain", "text/markdown", "text/html", "application/xhtml+xml"}:
+        return normalize_context(await extract_text_source(request, settings, mime))
     raise HTTPException(status_code=415, detail="Unsupported source type")

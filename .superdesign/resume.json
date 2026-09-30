@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "/": {
+      "targetKind": "existing-ui",
+      "projectId": "8edd64f1-43ae-46b8-ade6-4e63dde37cbc",
+      "baselineDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+      "activeDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "web/src/app/page.tsx",
+        "web/src/app/layout.tsx",
+        "web/src/components/dashboard/OperatorDashboard.tsx",
+        "web/src/components/dashboard/Header.tsx",
+        "web/src/components/dashboard/SourceInputPanel.tsx",
+        "web/src/components/dashboard/ConfigurationPanel.tsx",
+        "web/src/components/dashboard/DeliverableSelector.tsx",
+        "web/src/components/dashboard/JobStatusTracker.tsx",
+        "web/src/components/dashboard/DeliverablesViewer.tsx",
+        "web/src/components/dashboard/catalog.ts",
+        "web/src/app/globals.css",
+        "web/tailwind.config.ts"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3dc9524f0f51bc5ce1cf33f864eefb21fcf2bcdc0fe8a2da588cdf8eaf8567d8",
+        "web/src/app/page.tsx": "0529395cd1618228ec4408621b251280f55c6b7f85d00314611f0c002312fd86",
+        "web/src/app/layout.tsx": "2b2b76c0b19637473d961b6494e18d991277a3156714dd9335311257564428df",
+        "web/src/components/dashboard/OperatorDashboard.tsx": "d1a8fb24a597990c7e49c8d30387a499173ad8e3d067c5a37c9085e562154a13",
+        "web/src/components/dashboard/Header.tsx": "64c2ea6c52e2ab8a9d6e4a4550ce40efa3b4aa2b326f81ea5118c9c43a64fed9",
+        "web/src/components/dashboard/SourceInputPanel.tsx": "3d07fdf395b9b86903c7b908b90acdbc8188d1829b749486c28d0305322b654c",
+        "web/src/components/dashboard/ConfigurationPanel.tsx": "6c0dda1b4c791ad3c3a8978e7b528aaf59c89aa5e21c8e297eac17a36261ecac",
+        "web/src/components/dashboard/DeliverableSelector.tsx": "419487d1e236aea9a007fa503791f89dafccb05b003f8e2293f416b0b8fbd7b2",
+        "web/src/components/dashboard/JobStatusTracker.tsx": "13d9589cae63e9258023f1fa8993f026ebd27073663b23d7f1a39ae879b5f114",
+        "web/src/components/dashboard/DeliverablesViewer.tsx": "78d7685ab6871342addfca0d2663de4340027d09be74ca0d3954722e3cfbe112",
+        "web/src/components/dashboard/catalog.ts": "e76c689c5ce272a76b8dc1aa7572338ef532d2c103d4dbf8853384eff5aa21ff",
+        "web/src/app/globals.css": "a42fef46ae42968525905f67053a040ecef41356c7a92cc531e48abf9fb36997",
+        "web/tailwind.config.ts": "485e46d3e3d75ab107ea46eb63a44d1be39da063075f056f128f4725717220fd"
+      },
+      "components": [
+        {
+          "name": "DashboardHeader",
+          "id": "572944fa-ca58-4af8-ad9d-6d3cbfa2e232",
+          "sourcePath": "web/src/components/dashboard/Header.tsx"
+        }
+      ],
+      "drafts": {
+        "6d7ab409-ec43-4292-af60-b08198546508": {
+          "title": "Current Synthetix Operator Dashboard",
+          "visualDirection": "faithful current desktop baseline",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-09-27T14:14:23.586545+00:00"
+    },
+    "/jobs": {
+      "targetKind": "new-ui",
+      "projectId": "8edd64f1-43ae-46b8-ade6-4e63dde37cbc",
+      "activeDraftId": "62b8ded7-fab9-4447-8c87-571a43df0340",
+      "sourceTarget": "/",
+      "sourceDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "web/src/app/globals.css",
+        "web/tailwind.config.ts",
+        "web/src/components/dashboard/Header.tsx",
+        "web/src/components/dashboard/catalog.ts"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3dc9524f0f51bc5ce1cf33f864eefb21fcf2bcdc0fe8a2da588cdf8eaf8567d8",
+        "web/src/app/globals.css": "a42fef46ae42968525905f67053a040ecef41356c7a92cc531e48abf9fb36997",
+        "web/tailwind.config.ts": "485e46d3e3d75ab107ea46eb63a44d1be39da063075f056f128f4725717220fd",
+        "web/src/components/dashboard/Header.tsx": "64c2ea6c52e2ab8a9d6e4a4550ce40efa3b4aa2b326f81ea5118c9c43a64fed9",
+        "web/src/components/dashboard/catalog.ts": "e76c689c5ce272a76b8dc1aa7572338ef532d2c103d4dbf8853384eff5aa21ff"
+      },
+      "components": [
+        {
+          "name": "DashboardHeader",
+          "id": "572944fa-ca58-4af8-ad9d-6d3cbfa2e232",
+          "sourcePath": "web/src/components/dashboard/Header.tsx"
+        }
+      ],
+      "drafts": {
+        "62b8ded7-fab9-4447-8c87-571a43df0340": {
+          "title": "Job Queue",
+          "visualDirection": "connected Synthetix dark operator flow",
+          "parentDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-09-27T14:16:47.814526+00:00"
+    },
+    "/jobs/[id]": {
+      "targetKind": "new-ui",
+      "projectId": "8edd64f1-43ae-46b8-ade6-4e63dde37cbc",
+      "activeDraftId": "a9bda5e7-512c-4410-bfc9-2ad74af94106",
+      "sourceTarget": "/",
+      "sourceDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "web/src/app/globals.css",
+        "web/tailwind.config.ts",
+        "web/src/components/dashboard/Header.tsx",
+        "web/src/components/dashboard/catalog.ts"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3dc9524f0f51bc5ce1cf33f864eefb21fcf2bcdc0fe8a2da588cdf8eaf8567d8",
+        "web/src/app/globals.css": "a42fef46ae42968525905f67053a040ecef41356c7a92cc531e48abf9fb36997",
+        "web/tailwind.config.ts": "485e46d3e3d75ab107ea46eb63a44d1be39da063075f056f128f4725717220fd",
+        "web/src/components/dashboard/Header.tsx": "64c2ea6c52e2ab8a9d6e4a4550ce40efa3b4aa2b326f81ea5118c9c43a64fed9",
+        "web/src/components/dashboard/catalog.ts": "e76c689c5ce272a76b8dc1aa7572338ef532d2c103d4dbf8853384eff5aa21ff"
+      },
+      "components": [
+        {
+          "name": "DashboardHeader",
+          "id": "572944fa-ca58-4af8-ad9d-6d3cbfa2e232",
+          "sourcePath": "web/src/components/dashboard/Header.tsx"
+        }
+      ],
+      "drafts": {
+        "a9bda5e7-512c-4410-bfc9-2ad74af94106": {
+          "title": "Transformation Detail",
+          "visualDirection": "connected Synthetix dark operator flow",
+          "parentDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-09-27T14:16:47.814526+00:00"
+    },
+    "/jobs/[id]/results": {
+      "targetKind": "new-ui",
+      "projectId": "8edd64f1-43ae-46b8-ade6-4e63dde37cbc",
+      "activeDraftId": "798b21c1-00c9-4d33-9ab4-891acd293e97",
+      "sourceTarget": "/",
+      "sourceDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "web/src/app/globals.css",
+        "web/tailwind.config.ts",
+        "web/src/components/dashboard/Header.tsx",
+        "web/src/components/dashboard/catalog.ts"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3dc9524f0f51bc5ce1cf33f864eefb21fcf2bcdc0fe8a2da588cdf8eaf8567d8",
+        "web/src/app/globals.css": "a42fef46ae42968525905f67053a040ecef41356c7a92cc531e48abf9fb36997",
+        "web/tailwind.config.ts": "485e46d3e3d75ab107ea46eb63a44d1be39da063075f056f128f4725717220fd",
+        "web/src/components/dashboard/Header.tsx": "64c2ea6c52e2ab8a9d6e4a4550ce40efa3b4aa2b326f81ea5118c9c43a64fed9",
+        "web/src/components/dashboard/catalog.ts": "e76c689c5ce272a76b8dc1aa7572338ef532d2c103d4dbf8853384eff5aa21ff"
+      },
+      "components": [
+        {
+          "name": "DashboardHeader",
+          "id": "572944fa-ca58-4af8-ad9d-6d3cbfa2e232",
+          "sourcePath": "web/src/components/dashboard/Header.tsx"
+        }
+      ],
+      "drafts": {
+        "798b21c1-00c9-4d33-9ab4-891acd293e97": {
+          "title": "Deliverable Studio",
+          "visualDirection": "connected Synthetix dark operator flow; illustrative content labeled",
+          "parentDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+          "currentVersion": 2
+        }
+      },
+      "updatedAt": "2026-09-27T14:18:18.752923+00:00"
+    },
+    "/settings": {
+      "targetKind": "new-ui",
+      "projectId": "8edd64f1-43ae-46b8-ade6-4e63dde37cbc",
+      "activeDraftId": "ac820b6a-cbaa-4b75-be70-7ee97eff269f",
+      "sourceTarget": "/",
+      "sourceDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "web/src/app/globals.css",
+        "web/tailwind.config.ts",
+        "web/src/components/dashboard/Header.tsx",
+        "web/src/components/dashboard/catalog.ts"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "3dc9524f0f51bc5ce1cf33f864eefb21fcf2bcdc0fe8a2da588cdf8eaf8567d8",
+        "web/src/app/globals.css": "a42fef46ae42968525905f67053a040ecef41356c7a92cc531e48abf9fb36997",
+        "web/tailwind.config.ts": "485e46d3e3d75ab107ea46eb63a44d1be39da063075f056f128f4725717220fd",
+        "web/src/components/dashboard/Header.tsx": "64c2ea6c52e2ab8a9d6e4a4550ce40efa3b4aa2b326f81ea5118c9c43a64fed9",
+        "web/src/components/dashboard/catalog.ts": "e76c689c5ce272a76b8dc1aa7572338ef532d2c103d4dbf8853384eff5aa21ff"
+      },
+      "components": [
+        {
+          "name": "DashboardHeader",
+          "id": "572944fa-ca58-4af8-ad9d-6d3cbfa2e232",
+          "sourcePath": "web/src/components/dashboard/Header.tsx"
+        }
+      ],
+      "drafts": {
+        "ac820b6a-cbaa-4b75-be70-7ee97eff269f": {
+          "title": "Workspace Settings",
+          "visualDirection": "connected Synthetix dark operator flow",
+          "parentDraftId": "6d7ab409-ec43-4292-af60-b08198546508",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-09-27T14:16:47.814526+00:00"
+    }
+  }
+}

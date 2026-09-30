@@ -1,6 +1,7 @@
 __pycache__
+*.py[cod]
 .venv
+venv
+.pytest_cache
+tests
 .env
-*.pyc
-uploads
-tmp
